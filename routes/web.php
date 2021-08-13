@@ -1,9 +1,12 @@
 <?php
 
 use App\Models\Task;
+use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\UnauthorizedException;
+use Illuminate\Validation\ValidationException;
 
 /*
 |--------------------------------------------------------------------------
@@ -33,6 +36,7 @@ Route::middleware(['auth'])->group(function () {
         ]);
 
         Task::query()->create([
+            'watermelon_id' => bin2hex(random_bytes(8)),
             'user_id' => $request->user()->id,
             'name' => $validated['name'],
             'is_completed' => false,
@@ -66,6 +70,28 @@ Route::middleware(['auth'])->group(function () {
 
         return redirect()->route('dashboard');
     })->name('tasks.delete');
+});
+
+Route::post('/sanctum/token', function (Request $request) {
+    $request->validate([
+        'email' => 'required|email',
+        'password' => 'required',
+        'device_name' => 'required',
+    ]);
+
+    $user = User::where('email', $request->input('email'))->first();
+
+    if (! $user || ! Hash::check($request->input('password'), $user->password)) {
+        throw ValidationException::withMessages([
+            'email' => ['The provided credentials are incorrect.'],
+        ]);
+    }
+
+    $user->tokens()->delete();
+
+    return response([
+        'token' => $user->createToken($request->input('device_name'))->plainTextToken,
+    ]);
 });
 
 require __DIR__.'/auth.php';
